@@ -11,31 +11,28 @@ public:
     ArrayPtr() = default;
 
     explicit ArrayPtr(size_t size) {
-        if (size) {
-            raw_ptr_ = new Type[size];
-        }
-        else {
-            raw_ptr_ = nullptr;
-        }
+        raw_ptr_ = size == 0 ? nullptr : new Type[size]{};
     }
 
-    explicit ArrayPtr(Type* raw_ptr) noexcept {
-        raw_ptr_ = raw_ptr;
-    }
+    explicit ArrayPtr(Type* raw_ptr) noexcept 
+        :raw_ptr_(raw_ptr)
+    {}
 
     ArrayPtr(const ArrayPtr&) = delete;
 
     ArrayPtr& operator=(const ArrayPtr&) = delete;
 
-    ArrayPtr(ArrayPtr&& other) noexcept {
-        raw_ptr_ = other.Release();
+    ArrayPtr(ArrayPtr&& other) noexcept 
+        : raw_ptr_{other.raw_ptr_}
+    {
+        other.raw_ptr_ = nullptr;
     }
 
+
     ArrayPtr& operator=(ArrayPtr&& rhs) noexcept {
-        if (this != &rhs) {
-            raw_ptr_ = rhs.Release();
-        }
+        raw_ptr_ = std::swap(rhs.raw_ptr_, nullptr);
         return *this;
+    }
     }
 
     ~ArrayPtr() {
@@ -43,9 +40,7 @@ public:
     }
 
     [[nodiscard]] Type* Release() noexcept {
-        Type* temp = raw_ptr_;
-        raw_ptr_ = nullptr;
-        return temp;
+        return std::exchange(raw_ptr_, nullptr);
     }
 
     Type& operator[](size_t index) noexcept {
@@ -57,12 +52,7 @@ public:
     }
 
     explicit operator bool() const {
-        if (raw_ptr_) {
-            return true;
-        }
-        else {
-            return false;
-        }
+        return raw_ptr_ != nullptr;
     }
 
     Type* Get() const noexcept {

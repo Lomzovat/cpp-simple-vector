@@ -55,11 +55,12 @@ public:
     }
 
     SimpleVector(const SimpleVector& other) {
-        ArrayPtr<Type> temp(other.size_);
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        std::copy(other.begin(), other.end(), &temp[0]);
-        simple_vector_.swap(temp);
+           :simple_vector_(other.GetSize()),
+            size_(other.GetSize()),
+            capacity_(other.GetSize())
+        {
+            std::copy(other.begin(), other.end()), simple_vector_.Get());
+        }
     }
 
     SimpleVector(SimpleVector&& other) noexcept :
@@ -70,8 +71,17 @@ public:
 
     SimpleVector& operator=(const SimpleVector& rhs) {
         if (this != &rhs) {
-            SimpleVector temp(rhs);
+            SimpleVector <Type> temp(rhs);
             swap(temp);
+        }
+        return *this;
+    }
+
+    SimpleVector& operator=(SimpleVector&& rhs) noexcept {
+        if (this != &rhs) {
+            simple_vector_.swap(rhs.simple_vector_);
+            size_ = std::exchange(rhs.size_, 0);
+            capacity_ = std::exchange(rhs.capacity_, 0);
         }
         return *this;
     }
@@ -121,22 +131,28 @@ public:
     }
 
     void Resize(size_t new_size) {
-        if (size_ >= new_size) {
+        if (new_size <= size_) {
             size_ = new_size;
             return;
         }
-        else if (size_ < new_size && capacity_ > new_size) {
-            std::generate(begin() + size_, begin() + new_size, []() {return Type{}; });
-            size_ = new_size;
-            return;
+        if (new_size > size_ && new_size <= capacity_) {
+            for (auto it = begin(); it != (begin() + new_size); ++it) {
+                *it = std::move(Type{});
+            }
         }
         else {
+            /*через Reserve выдает ошибку и не могу понять
+                     size_t new_capacity = std::max(capacity_ * 2, new_size);
+                     Reserve(new_capacity);*/
+
             ArrayPtr<Type> temp(new_size);
             std::move(simple_vector_.Get(), simple_vector_.Get() + size_, &temp[0]);
             std::generate(temp.Get() + size_, temp.Get() + new_size, []() {return Type{}; });
             simple_vector_.swap(temp);
             size_ = new_size;
             capacity_ = new_size * 2;
+            
+
         }
     }
 
@@ -180,62 +196,40 @@ public:
     Iterator Insert(ConstIterator pos, const Type& value) {
         if (begin() <= pos && end() >= pos) {
             auto index = std::distance(cbegin(), pos);
-            if (size_ == capacity_) {
-                if (size_) {
-                    ArrayPtr<Type> temp(size_ *= 2);
-                    std::copy(begin(), end(), &temp[0]);
-                    simple_vector_.swap(temp);
-                    size_ = size_;
-                    capacity_ = size_ * 2;
-                }
-                else {
-                    ArrayPtr<Type> temp(++capacity_);
-                    std::copy(begin(), end(), &temp[0]);
-                    simple_vector_.swap(temp);
-                    capacity_ = 1;
-                }
+            if (size_ >= capacity_) {
+                size_t new_capacity = capacity_ == 0 ? 1 : capacity_ * 2;
+                Reserve(new_capacity);
             }
-            for (size_t i = size_; i > (size_t)index; --i) {
-                simple_vector_[i] = simple_vector_[i - 1];
-            }
+            Iterator position = begin() + index;
+            std::move_backward(position, end(), end() + 1);
             ++size_;
-            simple_vector_[index] = value;
-            return const_cast<Iterator>(index + begin());
+
+            return const_cast<Iterator>(position);
         }
         else {
             throw std::out_of_range("There is no such pos.");
         }
     }
 
+    // тоже с Reserve выдает ошибку
     Iterator Insert(ConstIterator pos, Type&& value) {
         if (begin() <= pos && end() >= pos) {
-            if (!capacity_) {
-                ArrayPtr<Type> temp(++capacity_);
-                std::move(begin(), end(), &temp[0]);
-                simple_vector_.swap(temp);
-                simple_vector_[size_++] = std::move(value);
-                return begin();
+            auto index = std::distance(cbegin(), pos);
+            if (size_ >= capacity_) {
+                size_t new_capacity = capacity_ == 0 ? 1 : capacity_ * 2;
+                Reserve(new_capacity);
             }
-            else if (capacity_ < size_ || capacity_ == size_) {
-                auto index = std::distance(begin(), const_cast<Iterator>(pos));
-                ArrayPtr<Type> temp(capacity_ *= 2);
-                std::move(begin(), end(), &temp[0]);
-                std::copy_backward(std::make_move_iterator(const_cast<Iterator>(pos)), std::make_move_iterator(begin() + size_), (&temp[1 + size_]));
-                temp[index] = std::move(value);
-                ++size_;
-                simple_vector_.swap(temp);
-                return Iterator(&simple_vector_[index]);
-            }
-            else {
-                std::copy_backward(std::make_move_iterator(const_cast<Iterator>(pos)), std::make_move_iterator(end()), (&simple_vector_[++size_ + 1]));
-                *const_cast<Iterator>(pos) = std::move(value);
-                return const_cast<Iterator>(pos);
-            }
+            Iterator position = begin() + index;
+            std::move_backward(position, end(), end() + 1);
+            ++size_;
+            *const_cast<Iterator>(pos) = std::move(value);
+            return const_cast<Iterator>(position);
         }
         else {
             throw std::out_of_range("There is no such pos.");
         }
     }
+
 
     Iterator Erase(ConstIterator pos) {
         if (begin() <= pos && end() >= pos) {
@@ -290,7 +284,7 @@ inline bool operator<(const SimpleVector<Type>& lhs, const SimpleVector<Type>& r
 
 template <typename Type>
 inline bool operator<=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return lhs < rhs || lhs == rhs;
+    return !(lhs > rhs)
 }
 
 template <typename Type>
