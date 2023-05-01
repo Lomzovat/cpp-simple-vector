@@ -141,10 +141,6 @@ public:
             }
         }
         else {
-            /*через Reserve выдает ошибку и не могу понять
-                     size_t new_capacity = std::max(capacity_ * 2, new_size);
-                     Reserve(new_capacity);*/
-
             ArrayPtr<Type> temp(new_size);
             std::move(simple_vector_.Get(), simple_vector_.Get() + size_, &temp[0]);
             std::generate(temp.Get() + size_, temp.Get() + new_size, []() {return Type{}; });
@@ -211,25 +207,36 @@ public:
         }
     }
 
-    // тоже с Reserve выдает ошибку
+    
     Iterator Insert(ConstIterator pos, Type&& value) {
         if (begin() <= pos && end() >= pos) {
-            auto index = std::distance(cbegin(), pos);
-            if (size_ >= capacity_) {
-                size_t new_capacity = capacity_ == 0 ? 1 : capacity_ * 2;
-                Reserve(new_capacity);
+            if (!capacity_) {
+                ArrayPtr<Type> temp(++capacity_);
+                std::move(begin(), end(), &temp[0]);
+                simple_vector_.swap(temp);
+                simple_vector_[size_++] = std::move(value);
+                return begin();
             }
-            Iterator position = begin() + index;
-            std::move_backward(position, end(), end() + 1);
-            ++size_;
-            *const_cast<Iterator>(pos) = std::move(value);
-            return const_cast<Iterator>(position);
+            else if (capacity_ < size_ || capacity_ == size_) {
+                auto index = std::distance(begin(), const_cast<Iterator>(pos));
+                ArrayPtr<Type> temp(capacity_ *= 2);
+                std::move(begin(), end(), &temp[0]);
+                std::copy_backward(std::make_move_iterator(const_cast<Iterator>(pos)), std::make_move_iterator(begin() + size_), (&temp[1 + size_]));
+                temp[index] = std::move(value);
+                ++size_;
+                simple_vector_.swap(temp);
+               return Iterator(&simple_vector_[index]);
+            }
+            else {
+                std::copy_backward(std::make_move_iterator(const_cast<Iterator>(pos)), std::make_move_iterator(end()), (&simple_vector_[++size_ + 1]));
+                *const_cast<Iterator>(pos) = std::move(value);
+                return const_cast<Iterator>(pos);
+            }
         }
         else {
             throw std::out_of_range("There is no such pos.");
         }
     }
-
 
     Iterator Erase(ConstIterator pos) {
         if (begin() <= pos && end() >= pos) {
