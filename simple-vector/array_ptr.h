@@ -28,12 +28,13 @@ public:
         other.raw_ptr_ = nullptr;
     }
 
-
     ArrayPtr& operator=(ArrayPtr&& rhs) noexcept {
-        raw_ptr_ = std::swap(rhs.raw_ptr_, nullptr);
+        std::swap(raw_ptr_, rhs.raw_ptr_);
+        rhs.raw_ptr_ = nullptr;
+
         return *this;
     }
-    }
+    
 
     ~ArrayPtr() {
         delete[]raw_ptr_;
