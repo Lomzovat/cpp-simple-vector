@@ -50,9 +50,7 @@ public:
         size_(size),
         capacity_(size)
     {
-        for (auto it = begin(); it != end(); ++it) {
-            *it = std::move(value);
-        }
+        std::generate(simple_vector_.Get(), simple_vector_.Get() + size_, [value]() {return value;});
     }
 
     SimpleVector(std::initializer_list<Type> init) :
@@ -148,8 +146,9 @@ public:
                 size_t new_capacity = std::max(capacity_ * 2, new_size);
                 Reserve(new_capacity);
             }
-            for (auto it = begin() + size_; it != begin() + new_size; ++it) {
-                *it = std::move(Type{});
+            else {
+                std::generate(begin() + size_, end() + new_size, []() {return Type{}; });
+                size_ = new_size;
             }
         }
         size_ = new_size;
@@ -200,7 +199,7 @@ public:
                 Reserve(new_capacity);
             }
             Iterator position = begin() + index;
-            std::copy_backward(position, cend(), end() + 1);
+            std::move_backward(position, cend(), end() + 1);
             ++size_;
             return position;
         }
