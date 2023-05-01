@@ -30,8 +30,7 @@ public:
 
     ArrayPtr& operator=(ArrayPtr&& rhs) noexcept {
         std::swap(raw_ptr_, rhs.raw_ptr_);
-        rhs.raw_ptr_ = nullptr;
-
+        
         return *this;
     }
     
